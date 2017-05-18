@@ -34,6 +34,7 @@ def add_args():
     parser.add_argument('-v', '--version', action='version', version='Version: {}'.format(__version__))
     parser.add_argument('-seconds_nap', action='store', dest='seconds_nap', default=20, help='Demo DEFAULT "20 Sec Nap"')
     parser.add_argument('-usnap', action='store', dest='usnap', default=0.2, help='sleep in seconds after empty socket read')
+    parser.add_argument('-c','--callback', action='store_true', dest='use_callback', default=False, help='Whether to use callback')
     cli_args = parser.parse_args()
     return cli_args
 

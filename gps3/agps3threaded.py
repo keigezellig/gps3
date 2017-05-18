@@ -29,11 +29,12 @@ class AGPS3mechanism(object):
         self.socket = agps3.GPSDSocket()
         self.data_stream = agps3.DataStream()
 
-    def stream_data(self, host=HOST, port=GPSD_PORT, enable=True, gpsd_protocol=PROTOCOL, devicepath=None):
-        """ Connect and command, point and shoot, flail and bail
+    def stream_data(self, host=HOST, port=GPSD_PORT, enable=True, gpsd_protocol=PROTOCOL, devicepath=None, on_datareceived=None):
+        """ Connect and command, point and shoot, flail and bail. on_datareceived is callback which is fired when data is received
         """
         self.socket.connect(host, port)
         self.socket.watch(enable, gpsd_protocol, devicepath)
+        self.on_datareceived = on_datareceived
 
     def unpack_data(self, usnap=.2):  # 2/10th second sleep between empty requests
         """ Iterates over socket response and unpacks values of object attributes.
@@ -42,6 +43,8 @@ class AGPS3mechanism(object):
         for new_data in self.socket:
             if new_data:
                 self.data_stream.unpack(new_data)
+                if self.on_datareceived is not None:
+                    self.on_datareceived(self.data_stream)
             else:
                 sleep(usnap)  # Sleep in seconds after an empty look up.
 
@@ -66,24 +69,41 @@ class AGPS3mechanism(object):
 
 
 if __name__ == '__main__':
+
+    def callback(data):
+        print ("******* Hello from callback...")
+        print('\nTime {}'.format(data.time))
+        print('Lat:{}  Lon:{}  Speed:{}  Course:{}\n'.format(data.lat,
+                                                             data.lon,
+                                                             data.speed,
+                                                             data.track))
     from misc import add_args
-    args = add_args()
+    try:
 
-    agps3_thread = AGPS3mechanism()  # The thread triumvirate
-    agps3_thread.stream_data(host=args.host, port=args.port, gpsd_protocol=args.gpsd_protocol)
-    agps3_thread.run_thread(usnap=.2)  # Throttle sleep between empty lookups in seconds defaults = 0.2 of a second.
+        args = add_args()
 
-    seconds_nap = int(args.seconds_nap)  # Threaded Demo loop 'seconds_nap' is not the same as 'usnap'
-    while True:
-        for nod in range(0, seconds_nap):
-            print('{:.0%} wait period of {} seconds'.format(nod / seconds_nap, seconds_nap), end='\r')
-            sleep(1)
+        agps3_thread = AGPS3mechanism()  # The thread triumvirate
+        if args.use_callback:
+            agps3_thread.stream_data(host=args.host, port=args.port, gpsd_protocol=args.gpsd_protocol, on_datareceived=callback)
+        else:
+            agps3_thread.stream_data(host=args.host, port=args.port, gpsd_protocol=args.gpsd_protocol, on_datareceived=None)
 
-        print('\nGPS3 Thread still functioning at {}'.format(agps3_thread.data_stream.time))
-        print('Lat:{}  Lon:{}  Speed:{}  Course:{}\n'.format(agps3_thread.data_stream.lat,
-                                                             agps3_thread.data_stream.lon,
-                                                             agps3_thread.data_stream.speed,
-                                                             agps3_thread.data_stream.track))
-#
+        agps3_thread.run_thread(usnap=.2)  # Throttle sleep between empty lookups in seconds defaults = 0.2 of a second.
+
+        while True:
+            if not args.use_callback:
+                seconds_nap = int(args.seconds_nap)  # Threaded Demo loop 'seconds_nap' is not the same as 'usnap'
+                for nod in range(0, seconds_nap):
+                    print('{:.0%} wait period of {} seconds'.format(nod / seconds_nap, seconds_nap), end='\r')
+                    sleep(1)
+
+                print('\nGPS3 Thread still functioning at {}'.format(agps3_thread.data_stream.time))
+                print('Lat:{}  Lon:{}  Speed:{}  Course:{}\n'.format(agps3_thread.data_stream.lat,
+                                                                     agps3_thread.data_stream.lon,
+                                                                     agps3_thread.data_stream.speed,
+                                                                     agps3_thread.data_stream.track))            
+    except KeyboardInterrupt:
+        agps3_thread.stop()
+    #
 ######
 # END
